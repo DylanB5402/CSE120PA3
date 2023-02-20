@@ -54,18 +54,32 @@
 
 void Main ()
 {
-	if (Fork () == 0) {
+	int t1, t2;
 
-		SlowPrintf (7, "2222222222");			// process 2
+	if (Fork () == 0) {
+		t1 = Gettime ();
+		SlowPrintf (2, "2222222222\n");			// process 2
+		t2 = Gettime ();
+		Printf ("Elapsed time = %d msecs\n", t2 - t1);
 		Exit ();
 	}
 
 	if (Fork () == 0) {
-
-		SlowPrintf (7, "3333333333");			// process 3
+		t1 = Gettime ();
+		SlowPrintf (2, "3333333333\n");			// process 3
+		t2 = Gettime ();
+		Printf ("Elapsed time = %d msecs\n", t2 - t1);
 		Exit ();
 	}
-
-	SlowPrintf (7, "1111111111");				// process 1
+	t1 = Gettime ();
+	SlowPrintf (2, "1111111111\n");				// process 1
+	t2 = Gettime ();
+	Printf ("Elapsed time = %d msecs\n", t2 - t1);
 	Exit ();
+
+	
+
+	
+	
+
 }

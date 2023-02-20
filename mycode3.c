@@ -12,6 +12,129 @@
 
 #define TIMERINTERVAL 100000	// in ticks (tick = 10 msec)
 
+
+static int queue[MAXPROCS];
+static int queueLen = 0;
+
+int queuePush(int element) {
+    if (queueLen >= MAXPROCS) {
+        return 0;
+    } else {
+        queue[queueLen] = element;
+        queueLen += 1;
+        return 1;
+    }
+}
+
+int queuePeek() {
+    return queue[0];
+}
+
+int queuePop() {
+    int firstElement = queuePeek();
+    int i;
+    for (i = 0; i < queueLen; i++) {
+        queue[i] = queue[i+1];
+    }
+    queue[queueLen - 1] = -1;
+    queueLen -= 1;
+    return firstElement;
+}
+
+int queueRemoveByValue(int val) {
+    int i;
+    int valIndex = -1;
+    for (i = 0; i < MAXPROCS; i++) {
+        if (queue[i] == val) {
+            valIndex = i; 
+        }
+    }
+    // Printf("valIndex: %d\n", valIndex);
+
+    if (valIndex == -1) {
+        return 0;
+    }
+
+    for (i = valIndex; i < MAXPROCS; i++) {
+        queue[i] = queue[i + 1];
+    }
+    queueLen -= 1;
+    return 1;
+}
+
+
+static int stack[MAXPROCS];
+static int stackLen = 0;
+
+void initStack() {
+    int i;
+    for (i = 0; i < MAXPROCS; i++) {
+        stack[i] = -1;
+    }
+}
+
+int stackPush(int element) {
+    if (stackLen >= MAXPROCS) {
+        return 0;
+    } else {
+        stack[stackLen] = element;
+        stackLen += 1;
+        return 1;
+    }
+}
+
+int stackPeek() {
+    return stack[stackLen - 1];
+}
+
+int stackPop() {
+    int lastElement = stackPeek();
+    if (lastElement == -1 || stackLen == 0) {
+        return -1;
+    } 
+    stack[stackLen - 1] = -1;
+    stackLen -= 1;
+    return lastElement;
+}
+
+int stackRemoveByValue(int val) {
+    int i;
+    int valIndex = -1;
+    for (i = 0; i < MAXPROCS; i++) {
+        if (stack[i] == val) {
+            valIndex = i; 
+        }
+    }
+
+    if (valIndex == -1) {
+        return 0;
+    }
+
+    for (i = valIndex; i < MAXPROCS; i++) {
+        if (i >= (stackLen - 1)) {
+            stack[i] = -1;
+        } else {
+            stack[i] = stack[i + 1];
+        }
+    }
+    stackLen -= 1;
+    return 1;
+}
+
+void printStack() {
+    int i;
+    Printf("Head [");
+    for (i = 0; i < MAXPROCS; i++) {
+        
+        if (i == stackLen - 1) {
+            Printf("%d] ", stack[i]);
+        } else {
+            Printf("%d ", stack[i]);
+        }
+    }
+    Printf("Tail, Size: %d \n", stackLen);
+}
+
 /*  	A sample process table.  You can change this in any way you wish. 
  */
 
@@ -56,7 +179,7 @@ void InitSched ()
 	for (i = 0; i < MAXPROCS; i++) {
 		proctab[i].valid = 0;
 	}
-
+	initStack();
 	/* Set the timer last */
 	SetTimer (TIMERINTERVAL);
 }
@@ -77,6 +200,9 @@ int StartingProc (int p)
 		if (! proctab[i].valid) {
 			proctab[i].valid = 1;
 			proctab[i].pid = p;
+			Printf("Process %d started\n", i);
+			queuePush(i);
+			stackPush(i);
 			return (1);
 		}
 	}
@@ -119,13 +245,14 @@ int EndingProc (int p)
 
 int SchedProc ()
 {
-	int i;
-
+	int i, id;
+	SetSchedPolicy(LIFO);
 	switch (GetSchedPolicy ()) {
 
 	case ARBITRARY:
 
 		for (i = 0; i < MAXPROCS; i++) {
+		// for (i = MAXPROCS - 1; i >= 0; i--) {
 			if (proctab[i].valid) {
 				return (proctab[i].pid);
 			}
@@ -133,15 +260,18 @@ int SchedProc ()
 		break;
 
 	case FIFO:
-
-		/* your code here */
-
+		id = queuePop();
+		stackRemoveByValue(id);
+		return proctab[id].pid;
 		break;
 
 	case LIFO:
-
-		/* your code here */
-
+		printStack();
+		id = stackPop();
+		if (proctab[id].valid) {
+			queueRemoveByValue(id);
+			return proctab[id].pid;
+		}
 		break;
 
 	case ROUNDROBIN:

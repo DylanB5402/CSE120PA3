@@ -22,5 +22,8 @@ pa3c:	pa3c.c aux.h umix.h mycode3.o $(LIB)
 mycode3.o:	mycode3.c aux.h sys.h mycode3.h
 	$(CC) $(FLAGS) -c mycode3.c
 
+stack:	stack.c aux.h umix.h mycode3.o $(LIB)
+	$(CC) $(FLAGS) -o stack stack.c mycode3.o
+
 clean:
 	rm -f *.o $(PA3)

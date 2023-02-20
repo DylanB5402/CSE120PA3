@@ -111,20 +111,20 @@ void Main ()
 
 		if (Fork () == 0) {
 
-			SlowPrintf (7, "4444444444");		// process 4
+			SlowPrintf (7, "4444444444\n");		// process 4
 			Exit ();
 		}
 
-		SlowPrintf (7, "2222222222");			// process 2
+		SlowPrintf (7, "2222222222\n");			// process 2
 		Exit ();
 	}
 
 	if (Fork () == 0) {
 
-		SlowPrintf (7, "3333333333");			// process 3
+		SlowPrintf (7, "3333333333\n");			// process 3
 		Exit ();
 	}
 
-	SlowPrintf (7, "1111111111");				// process 1
+	SlowPrintf (7, "1111111111\n");				// process 1
 	Exit ();
 }
