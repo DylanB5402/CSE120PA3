@@ -10,11 +10,18 @@
 #include "sys.h"
 #include "mycode3.h"
 
-#define TIMERINTERVAL 100000	// in ticks (tick = 10 msec)
-
+// #define TIMERINTERVAL 100000	// in ticks (tick = 10 msec)
+#define TIMERINTERVAL 5	// in ticks (tick = 10 msec)
 
 static int queue[MAXPROCS];
 static int queueLen = 0;
+
+void initMyQueue() {
+    int i;
+    for (i = 0; i < MAXPROCS; i++) {
+        queue[i] = -1;
+    }
+}
 
 int queuePush(int element) {
     if (queueLen >= MAXPROCS) {
@@ -49,14 +56,18 @@ int queueRemoveByValue(int val) {
             valIndex = i; 
         }
     }
-    // Printf("valIndex: %d\n", valIndex);
+    // printf("valIndex: %d\n", valIndex);
 
     if (valIndex == -1) {
         return 0;
     }
 
     for (i = valIndex; i < MAXPROCS; i++) {
-        queue[i] = queue[i + 1];
+        if (i >= (queueLen - 1)) {
+            queue[i] = -1;
+        } else {
+            queue[i] = queue[i + 1];
+        }
     }
     queueLen -= 1;
     return 1;
@@ -123,7 +134,7 @@ int stackRemoveByValue(int val) {
 
 void printStack() {
     int i;
-    Printf("Head [");
+    Printf("\nStack: Head [");
     for (i = 0; i < MAXPROCS; i++) {
         
         if (i == stackLen - 1) {
@@ -135,6 +146,19 @@ void printStack() {
     Printf("Tail, Size: %d \n", stackLen);
 }
 
+void printMyQueue() {
+    int i;
+    Printf("\nQueue: Head [");
+    for (i = 0; i < MAXPROCS; i++) {
+        
+        if (i == queueLen - 1) {
+            Printf("%d] ", queue[i]);
+        } else {
+            Printf("%d ", queue[i]);
+        }
+    }
+    Printf("Tail, Size: %d \n", queueLen);
+}
 /*  	A sample process table.  You can change this in any way you wish. 
  */
 
@@ -171,7 +195,8 @@ void InitSched ()
 	 */
 	if (GetSchedPolicy () == NOSCHEDPOLICY) {	// leave as is
 							// no other code here
-		SetSchedPolicy (ARBITRARY);		// set the policy here
+		// SetSchedPolicy (ARBITRARY);		// set the policy here
+		// SetSchedPolicy(LIFO);
 							// no other code here
 	}
 		
@@ -180,8 +205,13 @@ void InitSched ()
 		proctab[i].valid = 0;
 	}
 	initStack();
+	initMyQueue();
+	// printStack();
+	// printMyQueue();
+	// Printf("init timer\n");
 	/* Set the timer last */
 	SetTimer (TIMERINTERVAL);
+	// HandleTimerIntr();
 }
 
 
@@ -200,9 +230,11 @@ int StartingProc (int p)
 		if (! proctab[i].valid) {
 			proctab[i].valid = 1;
 			proctab[i].pid = p;
-			Printf("Process %d started\n", i);
+			// Printf("\nProcess id %d started, stored at index %d \n", p, i);
 			queuePush(i);
 			stackPush(i);
+			// printMyQueue();
+			// printStack();
 			return (1);
 		}
 	}
@@ -227,6 +259,11 @@ int EndingProc (int p)
 	for (i = 0; i < MAXPROCS; i++) {
 		if (proctab[i].valid && proctab[i].pid == p) {
 			proctab[i].valid = 0;
+			queueRemoveByValue(i);
+			stackRemoveByValue(i);
+			// Printf("\nProcess id %d ending, deleted from index %d \n", proctab[i].pid, i);
+			// printMyQueue();
+			// printStack();
 			return (1);
 		}
 	}
@@ -245,7 +282,13 @@ int EndingProc (int p)
 
 int SchedProc ()
 {
+	// Printf("Time: %d\n", GetTimer());
+	// Printf("Scheduling a new process\n");
+	// printStack();
+	// printMyQueue();
 	int i, id;
+	// SetSchedPolicy(ARBITRARY);
+	// SetSchedPolicy(FIFO);
 	SetSchedPolicy(LIFO);
 	switch (GetSchedPolicy ()) {
 
@@ -260,16 +303,18 @@ int SchedProc ()
 		break;
 
 	case FIFO:
+		// printMyQueue();
 		id = queuePop();
 		stackRemoveByValue(id);
 		return proctab[id].pid;
 		break;
 
 	case LIFO:
-		printStack();
-		id = stackPop();
+		// printStack();
+		id = stackPeek();
 		if (proctab[id].valid) {
-			queueRemoveByValue(id);
+			// queueRemoveByValue(id);
+			// Printf("LIFO: running process id %d at index %d\n", proctab[id].pid, id);
 			return proctab[id].pid;
 		}
 		break;
@@ -299,10 +344,15 @@ int SchedProc ()
 
 void HandleTimerIntr ()
 {
+	// Printf("Interrupt occuring here!\n");
 	SetTimer (TIMERINTERVAL);
 
-	switch (GetSchedPolicy ()) {	// is the policy preemptive?
+	
 
+	switch (GetSchedPolicy ()) {	// is the policy preemptive?
+	case LIFO:
+		DoSched();
+		break;
 	case ROUNDROBIN:		// ROUNDROBIN is preemptive
 	case PROPORTIONAL:		// PROPORTIONAL is preemptive
 
