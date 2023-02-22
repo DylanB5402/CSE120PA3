@@ -11,7 +11,10 @@
 #include "mycode3.h"
 
 // #define TIMERINTERVAL 100000	// in ticks (tick = 10 msec)
-#define TIMERINTERVAL 5	// in ticks (tick = 10 msec)
+#define TIMERINTERVAL 1	// in ticks (tick = 10 msec)
+
+#define noCpuRequested 0
+#define cpuRequested 1
 
 static int queue[MAXPROCS];
 static int queueLen = 0;
@@ -162,12 +165,101 @@ void printMyQueue() {
 /*  	A sample process table.  You can change this in any way you wish. 
  */
 
+static int circQueue[MAXPROCS];
+int circQueueLen = 0;
+int circQueuePos = 0;
+
+void initCircQueue() {
+    int i;
+    for (i = 0; i < MAXPROCS; i++) {
+        circQueue[i] = -1;
+    }
+}
+
+int circQueuePush(int element) {
+    if (circQueueLen >= MAXPROCS) {
+        return 0;
+    } else {
+        circQueue[circQueueLen] = element;
+        circQueueLen += 1;
+        return 1;
+    }
+}
+
+int circQueuePeek() {
+    return circQueue[circQueuePos];
+}
+
+int circQueueNext() {
+    int current = circQueuePeek();
+    if (circQueuePos == (circQueueLen - 1)) {
+        circQueuePos = 0;
+    } else {
+        circQueuePos++;
+    }
+    return current;
+}
+
+int circQueueRemoveByValue(int val) {
+    int i;
+    int valIndex = -1;
+    for (i = 0; i < MAXPROCS; i++) {
+        if (circQueue[i] == val) {
+            valIndex = i; 
+        }
+    }
+    // printf("valIndex: %d\n", valIndex);
+
+    if (valIndex == -1) {
+        return 0;
+    }
+
+    // printf("pos: %d, len: %d\n", circQueuePos, circQueueLen);
+    if (circQueuePos == (circQueueLen-1)) {
+        circQueuePos = 0;
+        
+    }
+
+    for (i = valIndex; i < MAXPROCS; i++) {
+        if (i >= (circQueueLen - 1)) {
+            circQueue[i] = -1;
+        } else {
+            circQueue[i] = circQueue[i + 1];
+        }
+    }
+    circQueueLen -= 1;
+    return 1;
+}
+
+void printCircQueue() {
+    int i;
+    Printf("Circular Queue: Head [");
+    for (i = 0; i < MAXPROCS; i++) {
+        if (i == circQueuePos) {
+            Printf("(%d) ", circQueue[i]);    
+        } else if (i == circQueueLen - 1) {
+            Printf("%d] ", circQueue[i]);
+        } else {
+            Printf("%d ", circQueue[i]);
+        }
+    }
+    Printf("Tail, Size: %d \n", circQueueLen);
+}
+
 static struct {
 	int valid;		// is this entry valid: 0 = no, 1 = yes 
 	int pid;		// process ID (as provided by kernel)
+	int strideRequest;
+	int strideValue;
+	int stridePass;
+    int requested;
+    int usage;
 } proctab[MAXPROCS];
 
-
+const int L = 100000;
+static int numRequestedProcesses = 0;
+static int numUnrequestedProcesses = 0;
+static int cpuPercentRemaining = 100;
 /* 	InitSched () is called when the kernel starts up.  First, set the
  *  	scheduling policy (see sys.h). Make sure you follow the rules below
  *   	on where and how to set it.  Next, initialize all your data structures
@@ -203,9 +295,14 @@ void InitSched ()
 	/* Initialize your data structures here */
 	for (i = 0; i < MAXPROCS; i++) {
 		proctab[i].valid = 0;
+		proctab[i].strideRequest = 0;
+		proctab[i].stridePass = 0;
+		proctab[i].strideValue = 0;
+        proctab[i].usage = 0;
 	}
 	initStack();
 	initMyQueue();
+	initCircQueue();
 	// printStack();
 	// printMyQueue();
 	// Printf("init timer\n");
@@ -233,6 +330,7 @@ int StartingProc (int p)
 			// Printf("\nProcess id %d started, stored at index %d \n", p, i);
 			queuePush(i);
 			stackPush(i);
+			circQueuePush(i);
 			// printMyQueue();
 			// printStack();
 			return (1);
@@ -255,15 +353,44 @@ int EndingProc (int p)
 	// p: process that is ending
 {
 	int i;
+    // Printf("Ending proc %d\n", p);
 
 	for (i = 0; i < MAXPROCS; i++) {
 		if (proctab[i].valid && proctab[i].pid == p) {
 			proctab[i].valid = 0;
 			queueRemoveByValue(i);
 			stackRemoveByValue(i);
+			circQueueRemoveByValue(i);
+
+            if (proctab[i].requested == noCpuRequested) {
+                numUnrequestedProcesses -= 1;
+            } else if (proctab[i].requested == cpuRequested) {
+                numRequestedProcesses -= 1;
+            } 
+            cpuPercentRemaining += proctab[i].strideRequest;
+            if (numUnrequestedProcesses > 0) {
+                Printf("numUnRq: %d\n", numUnrequestedProcesses);
+                int request = cpuPercentRemaining / numUnrequestedProcesses;
+                Printf("request is %d\n", request);
+                int j;
+                for (j = 0; j < MAXPROCS; j++) {
+                    if (proctab[j].valid && (proctab[j].requested == noCpuRequested)) {
+                        proctab[j].strideRequest = request;
+                        proctab[i].strideValue = L / request;
+
+                    }
+                }
+            }
 			// Printf("\nProcess id %d ending, deleted from index %d \n", proctab[i].pid, i);
 			// printMyQueue();
 			// printStack();
+
+            int j;
+            int total = 0;
+            Printf("\n----------\n");
+            for (j = 0; j < MAXPROCS; j++) {
+                Printf("\n proc %d at index %d usage %d \n, ", proctab[j].pid, j, proctab[j].usage);
+            }
 			return (1);
 		}
 	}
@@ -286,10 +413,12 @@ int SchedProc ()
 	// Printf("Scheduling a new process\n");
 	// printStack();
 	// printMyQueue();
-	int i, id;
+	int i, id, minPassProcess;
 	// SetSchedPolicy(ARBITRARY);
 	// SetSchedPolicy(FIFO);
-	SetSchedPolicy(LIFO);
+	// SetSchedPolicy(LIFO);
+	SetSchedPolicy(ROUNDROBIN);
+    // SetSchedPolicy(PROPORTIONAL);
 	switch (GetSchedPolicy ()) {
 
 	case ARBITRARY:
@@ -320,14 +449,36 @@ int SchedProc ()
 		break;
 
 	case ROUNDROBIN:
-
-		/* your code here */
+		id = circQueueNext();
+		if (proctab[id].valid) {
+            proctab[id].usage++;
+			return proctab[id].pid;
+		}
 
 		break;
 
 	case PROPORTIONAL:
-
-		/* your code here */
+        
+        minPassProcess = 0;
+        for (i = 0; i < MAXPROCS; i++) {
+            if (proctab[i].valid) {
+                minPassProcess = i;
+                break;
+            }
+        }
+		for (i = 0; i < MAXPROCS; i++) {
+            if (proctab[i].stridePass < proctab[minPassProcess].stridePass && (proctab[i].valid)) {
+                minPassProcess = i;
+            }
+        }
+        if (!proctab[minPassProcess].valid) {
+            return 0;
+        } else {
+            proctab[minPassProcess].stridePass += proctab[minPassProcess].strideValue;
+            // Printf("Running proc %d\n", proctab[minPassProcess].pid);
+            proctab[minPassProcess].usage++;
+            return proctab[minPassProcess].pid;
+        }
 
 		break;
 
@@ -346,14 +497,13 @@ void HandleTimerIntr ()
 {
 	// Printf("Interrupt occuring here!\n");
 	SetTimer (TIMERINTERVAL);
-
-	
-
 	switch (GetSchedPolicy ()) {	// is the policy preemptive?
 	case LIFO:
 		DoSched();
 		break;
 	case ROUNDROBIN:		// ROUNDROBIN is preemptive
+		DoSched();
+		break;
 	case PROPORTIONAL:		// PROPORTIONAL is preemptive
 
 		DoSched ();		// make a scheduling decision
@@ -380,7 +530,44 @@ int MyRequestCPUrate (int p, int n)
 	// p: process whose rate to change
 	// n: percent of CPU time
 {
-	/* your code here */
 
+	if (n < 0 || n > 100 || n > cpuPercentRemaining) {
+		return -1;
+	}
+
+    if (n == 0) {
+        numUnrequestedProcesses += 1;
+        int cpuRequest = cpuPercentRemaining / numUnrequestedProcesses;
+        int i;
+        for (i = 0; i < MAXPROCS; i++) {
+            if (proctab[i].pid == p && proctab[i].valid) {
+                proctab[i].strideRequest = cpuRequest;
+                proctab[i].strideValue = L / cpuRequest;
+                proctab[i].stridePass = 0;
+                proctab[i].requested = noCpuRequested;
+            }
+
+            if (proctab[i].requested == noCpuRequested) {
+                proctab[i].strideRequest = cpuRequest;
+                proctab[i].strideValue = L / cpuRequest;
+            }
+
+        }
+    } else {
+	
+        int i;
+        for (i = 0; i < MAXPROCS; i++) {
+            if (proctab[i].pid == p && proctab[i].valid) {
+                proctab[i].strideRequest = n;
+                proctab[i].strideValue = L / n;
+                proctab[i].stridePass = 0;
+                proctab[i].requested = cpuRequested;
+            }
+
+        }
+        cpuPercentRemaining -= n;
+        numRequestedProcesses += 1;
+        return 0;
+    }
 	return (0);
 }

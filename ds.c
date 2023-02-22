@@ -317,7 +317,7 @@ void printCircQueue() {
 }
 
 
-void main() {
+void testCQueue() {
     initCircQueue();
     printCircQueue();
     for (int i = 0; i < 5; i++) {
@@ -359,8 +359,25 @@ void main() {
     printCircQueue();
     // circQueueNext();
     // printCircQueue();
-    
+}
 
+static struct {
+	int valid;		// is this entry valid: 0 = no, 1 = yes 
+	int pid;		// process ID (as provided by kernel)
+	int strideRequest;
+	int strideValue;
+	int stridePass;
+    int requested;
+} proctab[MAXPROCS];
 
+// struct {
+//     int pid;
+//     int 
+// } requestInfo[MAXPROCS]
+// void sort(proctab[]) {
+
+// }
+
+void main() {
 
 }

@@ -110,21 +110,21 @@ void Main ()
 	if (Fork () == 0) {
 
 		if (Fork () == 0) {
-			Printf("\nProcess: %d\n", Getpid());
+			// Printf("\nProcess: %d\n", Getpid());
 			SlowPrintf (7, "4444444444");		// process 4
 			Exit ();
 		}
-		Printf("\nProcess: %d\n", Getpid());
+		// Printf("\nProcess: %d\n", Getpid());
 		SlowPrintf (7, "2222222222");			// process 2
 		Exit ();
 	}
 
 	if (Fork () == 0) {
-		Printf("\nProcess: %d\n", Getpid());
+		// Printf("\nProcess: %d\n", Getpid());
 		SlowPrintf (7, "3333333333");			// process 3
 		Exit ();
 	}
-	Printf("\nProcess: %d\n", Getpid());
+	// Printf("\nProcess: %d\n", Getpid());
 	SlowPrintf (7, "1111111111");				// process 1
 	Exit ();
 }
