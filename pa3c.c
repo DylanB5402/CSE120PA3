@@ -239,25 +239,41 @@ void Main ()
 	if (Fork () == 0) {
 
 		if (Fork () == 0) {
-
-			RequestCPUrate (10);			// process 4
-			SlowPrintf (7, "444444444444444444");
+			// Printf("\nprocess 4 starting\n");
+			// RequestCPUrate (10);
+			// RequestCPUrate (0);
+			// RequestCPUrate (25);	
+			SlowPrintf (5, "44444444444444");
+			// Printf("\nprocess 4 ending\n");
 			Exit ();
 		}
-
-		RequestCPUrate (30);				// process 2
-		SlowPrintf (7, "222222222222222222");
+			
+		// process 2
+		// Printf("\n B requests 50% \n");
+		// RequestCPUrate(30);
+		// RequestCPUrate(0);
+		// Printf("\nprocess 2 starting\n");
+		// RequestCPUrate (25);	
+		SlowPrintf (5, "2222222222222");
+		// Printf("\nprocess 2 ending\n");
 		Exit ();
 	}
 
 	if (Fork () == 0) {
-
-		RequestCPUrate (20);				// process 3
-		SlowPrintf (7, "333333333333333333");
+		// RequestCPUrate (0);				// process 3
+		// RequestCPUrate (20);				// process 3
+		// Printf("\nprocess 3 starting\n");
+		// RequestCPUrate (100);	
+		SlowPrintf (5, "33333333333333");
+		// Printf("\nprocess 3 ending\n");
 		Exit ();
 	}
 
-	RequestCPUrate (40);					// process 1
-	SlowPrintf (7, "111111111111111111");
+	// RequestCPUrate (0);					
+	// RequestCPUrate (40);					// process 1
+	// Printf("\nprocess 1 starting\n");
+	// RequestCPUrate (0);	
+	SlowPrintf (5, "11111111111111");
+	// Printf("\nprocess 1 ending\n");
 	Exit ();
 }

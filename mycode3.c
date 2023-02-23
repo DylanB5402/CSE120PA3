@@ -16,6 +16,7 @@
 #define noCpuRequested 0
 #define cpuRequested 1
 
+
 static int queue[MAXPROCS];
 static int queueLen = 0;
 
@@ -260,6 +261,7 @@ const int L = 100000;
 static int numRequestedProcesses = 0;
 static int numUnrequestedProcesses = 0;
 static int cpuPercentRemaining = 100;
+static int quantum = 0;
 /* 	InitSched () is called when the kernel starts up.  First, set the
  *  	scheduling policy (see sys.h). Make sure you follow the rules below
  *   	on where and how to set it.  Next, initialize all your data structures
@@ -299,6 +301,7 @@ void InitSched ()
 		proctab[i].stridePass = 0;
 		proctab[i].strideValue = 0;
         proctab[i].usage = 0;
+        proctab[i].requested = -1;
 	}
 	initStack();
 	initMyQueue();
@@ -331,6 +334,9 @@ int StartingProc (int p)
 			queuePush(i);
 			stackPush(i);
 			circQueuePush(i);
+            if (GetSchedPolicy() == PROPORTIONAL) {
+                MyRequestCPUrate(p, 0);
+            }
 			// printMyQueue();
 			// printStack();
 			return (1);
@@ -361,17 +367,21 @@ int EndingProc (int p)
 			queueRemoveByValue(i);
 			stackRemoveByValue(i);
 			circQueueRemoveByValue(i);
+            cpuPercentRemaining += proctab[i].strideRequest;
+            proctab[i].strideRequest = 0;
+            proctab[i].stridePass = 0;
+            proctab[i].strideValue = 0;
 
             if (proctab[i].requested == noCpuRequested) {
                 numUnrequestedProcesses -= 1;
             } else if (proctab[i].requested == cpuRequested) {
                 numRequestedProcesses -= 1;
             } 
-            cpuPercentRemaining += proctab[i].strideRequest;
+            
             if (numUnrequestedProcesses > 0) {
-                Printf("numUnRq: %d\n", numUnrequestedProcesses);
+                // Printf("numUnRq: %d\n", numUnrequestedProcesses);
                 int request = cpuPercentRemaining / numUnrequestedProcesses;
-                Printf("request is %d\n", request);
+                // Printf("request is %d\n", request);
                 int j;
                 for (j = 0; j < MAXPROCS; j++) {
                     if (proctab[j].valid && (proctab[j].requested == noCpuRequested)) {
@@ -382,15 +392,6 @@ int EndingProc (int p)
                 }
             }
 			// Printf("\nProcess id %d ending, deleted from index %d \n", proctab[i].pid, i);
-			// printMyQueue();
-			// printStack();
-
-            int j;
-            int total = 0;
-            Printf("\n----------\n");
-            for (j = 0; j < MAXPROCS; j++) {
-                Printf("\n proc %d at index %d usage %d \n, ", proctab[j].pid, j, proctab[j].usage);
-            }
 			return (1);
 		}
 	}
@@ -417,8 +418,8 @@ int SchedProc ()
 	// SetSchedPolicy(ARBITRARY);
 	// SetSchedPolicy(FIFO);
 	// SetSchedPolicy(LIFO);
-	SetSchedPolicy(ROUNDROBIN);
-    // SetSchedPolicy(PROPORTIONAL);
+	// SetSchedPolicy(ROUNDROBIN);
+    SetSchedPolicy(PROPORTIONAL);
 	switch (GetSchedPolicy ()) {
 
 	case ARBITRARY:
@@ -497,6 +498,17 @@ void HandleTimerIntr ()
 {
 	// Printf("Interrupt occuring here!\n");
 	SetTimer (TIMERINTERVAL);
+
+    // int j;
+    // int total = 0;
+    // if (quantum == 20) {
+    //     Printf("\n-----Quantum %d, %d percent available-----\n", quantum, cpuPercentRemaining);
+    //     Printf("%d processes requested, %d unrequested\n", numRequestedProcesses, numUnrequestedProcesses);
+    //     for (j = 0; j < 4; j++) {
+    //         Printf("\n current request: %d proc %d at index %d usage %d requestMode %d \n, ",proctab[j].strideRequest, proctab[j].pid, j, proctab[j].usage, proctab[j].requested);
+    //     }
+    // }
+
 	switch (GetSchedPolicy ()) {	// is the policy preemptive?
 	case LIFO:
 		DoSched();
@@ -505,13 +517,13 @@ void HandleTimerIntr ()
 		DoSched();
 		break;
 	case PROPORTIONAL:		// PROPORTIONAL is preemptive
-
 		DoSched ();		// make a scheduling decision
 		break;
 
 	default:			// if non-preemptive, do nothing
 		break;
 	}
+    quantum++;
 }
 
 /* 	MyRequestCPUrate (p,n) is called by the kernel whenever a process
@@ -530,7 +542,7 @@ int MyRequestCPUrate (int p, int n)
 	// p: process whose rate to change
 	// n: percent of CPU time
 {
-
+    // Printf("\n Requesting CPU for proc %d at rate %d\n", p, n);
 	if (n < 0 || n > 100 || n > cpuPercentRemaining) {
 		return -1;
 	}
@@ -538,12 +550,16 @@ int MyRequestCPUrate (int p, int n)
     if (n == 0) {
         numUnrequestedProcesses += 1;
         int cpuRequest = cpuPercentRemaining / numUnrequestedProcesses;
+        // Printf("\n%d percent remaining split %d ways is %d percent per proc\n", cpuPercentRemaining, numUnrequestedProcesses, cpuRequest);
         int i;
         for (i = 0; i < MAXPROCS; i++) {
             if (proctab[i].pid == p && proctab[i].valid) {
                 proctab[i].strideRequest = cpuRequest;
                 proctab[i].strideValue = L / cpuRequest;
                 proctab[i].stridePass = 0;
+                if (proctab[i].requested == cpuRequested) {
+                    numRequestedProcesses--;
+                }
                 proctab[i].requested = noCpuRequested;
             }
 
@@ -561,6 +577,9 @@ int MyRequestCPUrate (int p, int n)
                 proctab[i].strideRequest = n;
                 proctab[i].strideValue = L / n;
                 proctab[i].stridePass = 0;
+                if (proctab[i].requested == noCpuRequested) {
+                    numUnrequestedProcesses--;
+                }
                 proctab[i].requested = cpuRequested;
             }
 
@@ -571,3 +590,4 @@ int MyRequestCPUrate (int p, int n)
     }
 	return (0);
 }
+
